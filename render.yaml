@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: semantic-word-game-api
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: |
+      cd backend && pip install --no-cache-dir -r requirements.txt
+    startCommand: |
+      cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://semantic-word-game-frontend.vercel.app
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://semantic-word-game-frontend.vercel.app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: semantic-word-game-db
+          property: connectionString
+      - key: SCORING_BACKEND
+        value: llm_judge
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-6
+      - key: GUESS_RATE_LIMIT_PER_MINUTE
+        value: "30"
+
+  - type: pserv
+    name: semantic-word-game-db
+    env: postgresql
+    region: oregon
+    plan: free
