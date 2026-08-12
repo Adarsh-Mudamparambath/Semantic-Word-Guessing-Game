@@ -24,7 +24,9 @@ export default function App() {
         const today = await getToday();
         setGame(today);
         const history = await getHistory(today.game_id);
-        const ordered = [...history.guesses].reverse(); // newest first
+        const ordered = [...history.guesses]
+          .sort((a, b) => b.score - a.score)
+          .map((g) => ({ ...g }));
         setGuesses(ordered);
         if (ordered.length > 0) {
           setCurrent({ score: ordered[0].score, feedback: "" });
@@ -55,7 +57,7 @@ export default function App() {
           setGuesses((prev) => [
             { guess: result.guess, score: result.score, is_correct: result.is_correct },
             ...prev,
-          ]);
+          ].sort((a, b) => b.score - a.score));
         }
         if (result.is_correct) setShowWin(true);
       } catch (e) {

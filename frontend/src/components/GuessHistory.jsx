@@ -15,8 +15,7 @@ export default function GuessHistory({ guesses, bestScore }) {
     );
   }
 
-  const oldestFirst = [...guesses].reverse();
-  const latestIndex = guesses.length - 1;
+  const strongestFirst = [...guesses].sort((a, b) => b.score - a.score);
 
   return (
     <div>
@@ -26,9 +25,8 @@ export default function GuessHistory({ guesses, bestScore }) {
           best <span className="text-parchment">{bestScore}%</span>
         </span>
       </div>
-      <ol className="space-y-1.5" aria-label="Guess history, oldest to newest">
-        {oldestFirst.map((g, i) => {
-          const isLatest = i === latestIndex;
+      <ol className="space-y-1.5" aria-label="Guess history by score">
+        {strongestFirst.map((g, i) => {
           const color = heatColor(g.score);
           return (
             <li
@@ -36,7 +34,7 @@ export default function GuessHistory({ guesses, bestScore }) {
               className={`flex items-center gap-3 rounded-lg px-4 py-2.5 border transition-colors ${
                 g.is_correct
                   ? "border-ember bg-ember/10"
-                  : isLatest
+                  : i === 0
                   ? "border-ice bg-ice/10"
                   : "border-chartline bg-chart"
               }`}
