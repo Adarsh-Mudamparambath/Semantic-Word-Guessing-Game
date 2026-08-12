@@ -13,7 +13,7 @@ function buildShareText(dateStr, guesses) {
   return `Meridian\n${dateStr}\n\n${guesses.length} guesses\n\n${lines.join("\n")}\n\nCan you chart it?`;
 }
 
-export default function WinScreen({ secretWord, guesses, dateStr, onClose }) {
+export default function WinScreen({ secretWord, guesses, dateStr, onClose, onNextRound }) {
   const shareText = buildShareText(dateStr, guesses);
 
   async function handleShare() {
@@ -55,10 +55,10 @@ export default function WinScreen({ secretWord, guesses, dateStr, onClose }) {
             Share result
           </button>
           <button
-            onClick={onClose}
+            onClick={onNextRound || onClose}
             className="px-4 py-3 rounded-xl border border-chartline text-muted hover:text-parchment transition-colors"
           >
-            Close
+            {onNextRound ? "Next word" : "Close"}
           </button>
         </div>
       </div>

@@ -75,3 +75,22 @@ def test_duplicate_guess_returns_same_score():
         first = client.post("/api/game/guess", json={"game_id": today["game_id"], "guess": "boat"})
         second = client.post("/api/game/guess", json={"game_id": today["game_id"], "guess": "boat"})
     assert first.json()["score"] == second.json()["score"] == 42
+
+
+def test_reveal_returns_secret_word_for_game():
+    today = client.get("/api/game/today").json()
+    resp = client.get(f"/api/game/reveal?game_id={today['game_id']}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["game_id"] == today["game_id"]
+    assert body["secret_word"] in {"ocean", "football"}
+
+
+def test_new_round_resets_guesses_for_session():
+    today = client.get("/api/game/today").json()
+    with patch("app.game_service.scoring.calculate_score", return_value=42):
+        client.post("/api/game/guess", json={"game_id": today["game_id"], "guess": "boat"})
+    resp = client.post("/api/game/new-round", json={"game_id": today["game_id"]})
+    assert resp.status_code == 200
+    history = client.get(f"/api/game/history?game_id={today['game_id']}")
+    assert history.json()["guesses"] == []

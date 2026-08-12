@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, timezone, datetime
+from datetime import date, timedelta, timezone, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session
 from app import game_service, models, scoring
 from app.config import get_settings
 from app.database import get_db
-from app.schemas import GuessRequest, GuessResponse, HistoryEntry, HistoryResponse, TodayGameResponse
+from app.schemas import (
+    GuessRequest,
+    GuessResponse,
+    HistoryEntry,
+    HistoryResponse,
+    RevealResponse,
+    TodayGameResponse,
+)
 from app.security import read_session_cookie, rate_limit, write_session_cookie
 
 router = APIRouter(prefix="/api/game", tags=["game"])
@@ -29,6 +36,46 @@ def get_today(
     session = game_service.get_or_create_session(db, session_id)
     write_session_cookie(response, str(session.id))
     # Secret word is intentionally NEVER included in this response.
+    return TodayGameResponse(game_id=str(daily_game.id), date=daily_game.game_date)
+
+
+@router.get("/reveal", response_model=RevealResponse)
+def reveal_secret_word(
+    game_id: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        game_uuid = uuid.UUID(game_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
+
+    daily_game = db.get(models.DailyGame, game_uuid)
+    if daily_game is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
+
+    return RevealResponse(
+        game_id=str(daily_game.id),
+        secret_word=daily_game.secret_word.normalized_word,
+        revealed_by_ad=True,
+    )
+
+
+@router.post("/new-round", response_model=TodayGameResponse)
+def start_next_round(
+    payload: dict | None = None,
+    db: Session = Depends(get_db),
+    session_id: str | None = Depends(read_session_cookie),
+):
+    if not session_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session required.")
+
+    session = game_service.get_or_create_session(db, session_id)
+    db.execute(
+        models.Guess.__table__.delete().where(models.Guess.session_id == session.id)
+    )
+    db.commit()
+
+    daily_game = game_service.get_or_create_daily_game(db, _today())
     return TodayGameResponse(game_id=str(daily_game.id), date=daily_game.game_date)
 
 

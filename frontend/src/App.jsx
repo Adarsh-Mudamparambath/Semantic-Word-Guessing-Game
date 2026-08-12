@@ -6,7 +6,8 @@ import GuessHistory from "./components/GuessHistory.jsx";
 import WinScreen from "./components/WinScreen.jsx";
 import AdContainer from "./components/AdContainer.jsx";
 import HelpModal from "./components/HelpModal.jsx";
-import { getToday, submitGuess, getHistory } from "./api.js";
+import AdRevealModal from "./components/AdRevealModal.jsx";
+import { getToday, submitGuess, getHistory, revealSecretWord, startNextRound } from "./api.js";
 
 export default function App() {
   const [game, setGame] = useState(null); // { game_id, date }
@@ -16,6 +17,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [showWin, setShowWin] = useState(false);
+  const [showAdReveal, setShowAdReveal] = useState(false);
+  const [revealedWord, setRevealedWord] = useState("");
   const [initLoading, setInitLoading] = useState(true);
 
   useEffect(() => {
@@ -72,6 +75,43 @@ export default function App() {
   const bestScore = guesses.reduce((max, g) => Math.max(max, g.score), 0);
   const solvedGuess = guesses.find((g) => g.is_correct);
 
+  const resetRound = useCallback(async () => {
+    setLoading(true);
+    try {
+      const nextGame = await startNextRound();
+      const history = await getHistory(nextGame.game_id);
+      setGame(nextGame);
+      setGuesses([]);
+      setCurrent({ score: 0, feedback: "" });
+      setShowWin(false);
+      setShowAdReveal(false);
+      setRevealedWord("");
+      setError("");
+      if (history.solved) {
+        setShowWin(true);
+      }
+    } catch (e) {
+      setError("Couldn't start the next word. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleRevealAd = useCallback(async () => {
+    if (!game) return;
+    setError("");
+    setLoading(true);
+    try {
+      const result = await revealSecretWord(game.game_id);
+      setRevealedWord(result.secret_word);
+      setShowAdReveal(true);
+    } catch (e) {
+      setError("Ad reveal failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [game]);
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="max-w-2xl mx-auto w-full px-4 flex-1 flex flex-col">
@@ -93,7 +133,17 @@ export default function App() {
             <>
               <ScoreGauge score={current.score} feedback={current.feedback} loading={loading} />
 
-              <GuessInput onSubmit={handleGuess} disabled={loading || !game} error={error} />
+              <div className="flex gap-3">
+                <GuessInput onSubmit={handleGuess} disabled={loading || !game} error={error} />
+                <button
+                  type="button"
+                  onClick={handleRevealAd}
+                  disabled={loading || !game}
+                  className="px-4 py-3 rounded-xl border border-ember text-ember hover:bg-ember/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Reveal ad
+                </button>
+              </div>
 
               <AdContainer placement="inline" />
 
@@ -110,12 +160,23 @@ export default function App() {
       </div>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {showAdReveal && revealedWord && (
+        <AdRevealModal
+          secretWord={revealedWord}
+          onContinue={resetRound}
+          onClose={() => {
+            setShowAdReveal(false);
+            setRevealedWord("");
+          }}
+        />
+      )}
       {showWin && solvedGuess && game && (
         <WinScreen
           secretWord={solvedGuess.guess}
           guesses={[...guesses].reverse()}
           dateStr={game.date}
           onClose={() => setShowWin(false)}
+          onNextRound={resetRound}
         />
       )}
     </div>

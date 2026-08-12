@@ -9,6 +9,12 @@ class TodayGameResponse(BaseModel):
     date: date
 
 
+class RevealResponse(BaseModel):
+    game_id: str
+    secret_word: str
+    revealed_by_ad: bool = True
+
+
 class GuessRequest(BaseModel):
     game_id: str
     guess: str = Field(..., min_length=1, max_length=64)

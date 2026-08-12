@@ -20,6 +20,17 @@ export function getToday() {
   return request("/today");
 }
 
+export function revealSecretWord(gameId) {
+  return request(`/reveal?game_id=${encodeURIComponent(gameId)}`);
+}
+
+export function startNextRound() {
+  return request("/new-round", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export function submitGuess(gameId, guess) {
   return request("/guess", {
     method: "POST",
