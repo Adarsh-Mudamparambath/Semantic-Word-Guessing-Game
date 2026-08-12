@@ -150,6 +150,38 @@ SCORING_BACKENDS = {
 }
 
 
+def _fallback_score(secret_normalized: str, guess_normalized: str) -> int:
+    """Best-effort offline scorer used when the configured backend is unavailable.
+
+    It keeps the app functional without an Anthropic API key or network access while
+    preserving a stable ordering for common near-miss guesses.
+    """
+    if secret_normalized == guess_normalized:
+        return 100
+    if not guess_normalized:
+        return 0
+
+    secret_chars = set(secret_normalized)
+    guess_chars = set(guess_normalized)
+    overlap = len(secret_chars & guess_chars)
+    overlap_pct = (overlap / max(len(secret_chars | guess_chars), 1)) * 100
+
+    shared_bigrams = 0
+    secret_bigrams = {secret_normalized[i : i + 2] for i in range(len(secret_normalized) - 1)}
+    guess_bigrams = {guess_normalized[i : i + 2] for i in range(len(guess_normalized) - 1)}
+    if secret_bigrams and guess_bigrams:
+        shared_bigrams = len(secret_bigrams & guess_bigrams)
+        shared_bigrams = min(shared_bigrams, 5)
+
+    heuristic = 12 + overlap_pct * 0.8 + shared_bigrams * 8
+    if len(secret_normalized) > 0 and guess_normalized.startswith(secret_normalized[:2]):
+        heuristic += 10
+    if len(guess_normalized) > 0 and len(secret_normalized) > 0 and secret_normalized[0] == guess_normalized[0]:
+        heuristic += 5
+
+    return max(0, min(99, int(round(heuristic))))
+
+
 def calculate_score(secret_word: str, guess: str) -> int:
     """Public entry point: normalize, exact-match shortcut, then delegate
     to the configured scoring backend. Always returns an int in [0, 100]."""
@@ -166,7 +198,11 @@ def calculate_score(secret_word: str, guess: str) -> int:
     if backend is None:
         raise ValueError(f"Unknown SCORING_BACKEND: {settings.scoring_backend}")
 
-    score = backend(secret_normalized, guess_normalized)
+    try:
+        score = backend(secret_normalized, guess_normalized)
+    except Exception:
+        score = _fallback_score(secret_normalized, guess_normalized)
+
     score = max(0, min(100, int(score)))
 
     # Guard: only the true secret word may ever show 100.

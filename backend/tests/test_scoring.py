@@ -32,6 +32,12 @@ def test_empty_guess_scores_zero():
     assert scoring.calculate_score("ocean", "   ") == 0
 
 
+def test_api_failure_falls_back_to_local_similarity():
+    with patch.object(scoring, "_get_client", side_effect=Exception("bad api key")):
+        score = scoring.calculate_score("ocean", "sea")
+        assert 0 <= score <= 99
+
+
 def test_feedback_thresholds_monotonic():
     labels = [scoring.get_feedback(s) for s in (0, 25, 45, 65, 85, 92, 96, 100)]
     # each threshold tier should differ from the previous as score climbs
