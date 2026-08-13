@@ -8,7 +8,7 @@ services:
     buildCommand: |
       cd backend && pip install --no-cache-dir -r requirements.txt
     startCommand: |
-      cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+      cd backend && python ../scripts/seed_database.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       # pydantic-core 2.23.4 ships prebuilt wheels for Python 3.12.
       # Pinning avoids Render's newer default Python 3.14 runtime.
