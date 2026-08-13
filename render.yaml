@@ -10,6 +10,10 @@ services:
     startCommand: |
       cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      # pydantic-core 2.23.4 ships prebuilt wheels for Python 3.12.
+      # Pinning avoids Render's newer default Python 3.14 runtime.
+      - key: PYTHON_VERSION
+        value: 3.12.11
       - key: ENVIRONMENT
         value: production
       - key: SECRET_KEY
