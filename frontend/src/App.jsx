@@ -7,9 +7,12 @@ import WinScreen from "./components/WinScreen.jsx";
 import AdContainer from "./components/AdContainer.jsx";
 import HelpModal from "./components/HelpModal.jsx";
 import AdRevealModal from "./components/AdRevealModal.jsx";
+import PrivacyPage from "./components/PrivacyPage.jsx";
 import { getToday, submitGuess, getHistory, revealSecretWord, startNextRound } from "./api.js";
 
 export default function App() {
+  if (window.location.pathname === "/privacy") return <PrivacyPage />;
+
   const [game, setGame] = useState(null); // { game_id, date }
   const [guesses, setGuesses] = useState([]); // newest first
   const [current, setCurrent] = useState({ score: 0, feedback: "" });
@@ -141,7 +144,7 @@ export default function App() {
                   disabled={loading || !game}
                   className="px-4 py-3 rounded-xl border border-ember text-ember hover:bg-ember/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Reveal ad
+                  Reveal answer
                 </button>
               </div>
 
@@ -155,7 +158,8 @@ export default function App() {
         <AdContainer placement="footer" className="mb-4" />
 
         <footer className="text-center text-xs text-muted py-4 border-t border-chartline">
-          Meridian — a new word to chart every day.
+          {import.meta.env.VITE_APP_TITLE ?? "Meridian"} — a new word to chart every day.
+          <a className="underline hover:text-parchment" href="/privacy">Privacy</a>
         </footer>
       </div>
 

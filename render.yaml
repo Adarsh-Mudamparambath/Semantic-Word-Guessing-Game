@@ -1,7 +1,7 @@
 services:
   - type: web
     name: semantic-word-game-api
-    env: python
+    runtime: python
     region: oregon
     plan: free
     branch: main
@@ -15,9 +15,9 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
-        value: https://semantic-word-game-frontend.vercel.app
+        sync: false
       - key: CORS_ALLOWED_ORIGINS
-        value: https://semantic-word-game-frontend.vercel.app
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: semantic-word-game-db
@@ -31,8 +31,9 @@ services:
       - key: GUESS_RATE_LIMIT_PER_MINUTE
         value: "30"
 
-  - type: pserv
-    name: semantic-word-game-db
-    env: postgresql
+databases:
+  - name: semantic-word-game-db
     region: oregon
     plan: free
+    databaseName: semantic_word_game
+    user: semantic_word_game

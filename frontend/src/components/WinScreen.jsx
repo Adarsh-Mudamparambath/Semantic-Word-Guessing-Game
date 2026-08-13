@@ -1,3 +1,5 @@
+const APP_TITLE = import.meta.env.VITE_APP_TITLE ?? "Meridian";
+
 function buildShareText(dateStr, guesses) {
   const emojiForScore = (s) => {
     if (s >= 100) return "🎉";
@@ -10,7 +12,7 @@ function buildShareText(dateStr, guesses) {
     return "❄️";
   };
   const lines = guesses.map((g) => `${emojiForScore(g.score)} ${g.score}%`);
-  return `Meridian\n${dateStr}\n\n${guesses.length} guesses\n\n${lines.join("\n")}\n\nCan you chart it?`;
+  return `${APP_TITLE}\n${dateStr}\n\n${guesses.length} guesses\n\n${lines.join("\n")}\n\nCan you chart it?`;
 }
 
 export default function WinScreen({ secretWord, guesses, dateStr, onClose, onNextRound }) {
