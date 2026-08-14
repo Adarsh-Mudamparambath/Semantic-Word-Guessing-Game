@@ -38,7 +38,11 @@ def write_session_cookie(response: Response, session_id: str) -> None:
         key=SESSION_COOKIE_NAME,
         value=session_id,
         httponly=True,
-        samesite="lax",
+        # For cross-origin frontend <-> API deployments we need the cookie to be
+        # sent on fetch() requests. That requires `SameSite=None` and `Secure`.
+        # Use `None` only in production where `Secure` will be True; keep
+        # `lax` in development to avoid requiring HTTPS locally.
+        samesite=("none" if settings.environment == "production" else "lax"),
         secure=(settings.environment == "production"),
         max_age=60 * 60 * 24 * 365,
     )
