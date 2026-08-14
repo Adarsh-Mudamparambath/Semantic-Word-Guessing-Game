@@ -86,14 +86,29 @@ def test_reveal_returns_secret_word_for_game():
     assert body["secret_word"] in {"ocean", "football"}
 
 
-def test_new_round_resets_guesses_for_session():
+def test_new_round_creates_a_private_random_round():
     today = client.get("/api/game/today").json()
+    daily_word = client.get(f"/api/game/reveal?game_id={today['game_id']}").json()["secret_word"]
     with patch("app.game_service.scoring.calculate_score", return_value=42):
         client.post("/api/game/guess", json={"game_id": today["game_id"], "guess": "boat"})
     resp = client.post("/api/game/new-round", json={"game_id": today["game_id"]})
     assert resp.status_code == 200
-    history = client.get(f"/api/game/history?game_id={today['game_id']}")
+    random_round = resp.json()
+    assert random_round["mode"] == "random"
+    assert random_round["game_id"] != today["game_id"]
+    random_word = client.get(f"/api/game/reveal?game_id={random_round['game_id']}").json()["secret_word"]
+    assert random_word != daily_word
+    history = client.get(f"/api/game/history?game_id={random_round['game_id']}")
     assert history.json()["guesses"] == []
+
+
+def test_next_random_round_uses_an_unseen_word():
+    first = client.post("/api/game/new-round", json={}).json()
+    first_word = client.get(f"/api/game/reveal?game_id={first['game_id']}").json()["secret_word"]
+    second = client.post("/api/game/new-round", json={}).json()
+    second_word = client.get(f"/api/game/reveal?game_id={second['game_id']}").json()["secret_word"]
+
+    assert first_word != second_word
 
 
 def test_new_round_creates_a_session_when_cookie_is_missing():

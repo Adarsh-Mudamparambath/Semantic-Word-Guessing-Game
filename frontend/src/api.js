@@ -24,10 +24,10 @@ export function revealSecretWord(gameId) {
   return request(`/reveal?game_id=${encodeURIComponent(gameId)}`);
 }
 
-export function startNextRound() {
+export function startNextRound(gameId) {
   return request("/new-round", {
     method: "POST",
-    body: JSON.stringify({}),
+    body: JSON.stringify({ game_id: gameId }),
   });
 }
 

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 class TodayGameResponse(BaseModel):
     game_id: str
     date: date
+    mode: str = "daily"
 
 
 class RevealResponse(BaseModel):

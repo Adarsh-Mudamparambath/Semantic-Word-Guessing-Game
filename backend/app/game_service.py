@@ -78,6 +78,42 @@ def get_or_create_session(db: Session, session_id: str | None) -> models.PlayerS
     return new_session
 
 
+def create_random_round(
+    db: Session,
+    session: models.PlayerSession,
+    exclude_word_ids: set[int] | None = None,
+) -> models.RandomRound:
+    """Create a private round, avoiding words this session has already seen.
+
+    Once the player has exhausted the word list, reuse becomes preferable to
+    failing to start a round.
+    """
+    used_word_ids = set(db.execute(
+        select(models.RandomRound.secret_word_id).where(
+            models.RandomRound.session_id == session.id
+        )
+    ).scalars().all())
+    used_word_ids.update(exclude_word_ids or set())
+
+    query = select(models.Word).where(models.Word.is_active.is_(True))
+    if used_word_ids:
+        query = query.where(models.Word.id.notin_(used_word_ids))
+    word = db.execute(query.order_by(func.random()).limit(1)).scalar_one_or_none()
+    if word is None:
+        word = db.execute(
+            select(models.Word)
+            .where(models.Word.is_active.is_(True))
+            .order_by(func.random())
+            .limit(1)
+        ).scalar_one()
+
+    round_ = models.RandomRound(session_id=session.id, secret_word_id=word.id)
+    db.add(round_)
+    db.commit()
+    db.refresh(round_)
+    return round_
+
+
 def _cached_score(db: Session, secret_normalized: str, guess_normalized: str) -> int | None:
     row = db.execute(
         select(models.ScoreCache).where(
@@ -135,6 +171,48 @@ def submit_guess(
 
     guess_row = models.Guess(
         daily_game_id=daily_game.id,
+        session_id=session.id,
+        guess=raw_guess.strip(),
+        normalized_guess=normalized_guess,
+        score=score,
+        is_correct=(score == 100),
+    )
+    db.add(guess_row)
+    db.commit()
+    db.refresh(guess_row)
+    return guess_row, False
+
+
+def submit_random_guess(
+    db: Session,
+    round_: models.RandomRound,
+    session: models.PlayerSession,
+    raw_guess: str,
+) -> tuple[models.RandomGuess, bool]:
+    normalized_guess = scoring.normalize(raw_guess)
+    secret_normalized = scoring.normalize(round_.secret_word.normalized_word)
+    prior = db.execute(
+        select(models.RandomGuess).where(
+            models.RandomGuess.random_round_id == round_.id,
+            models.RandomGuess.session_id == session.id,
+            models.RandomGuess.normalized_guess == normalized_guess,
+        ).order_by(models.RandomGuess.created_at.desc())
+    ).scalars().first()
+    if prior:
+        return prior, True
+
+    if normalized_guess == secret_normalized:
+        score = 100
+    else:
+        cached = _cached_score(db, secret_normalized, normalized_guess)
+        if cached is not None:
+            score = cached
+        else:
+            score = scoring.calculate_score(round_.secret_word.normalized_word, raw_guess)
+            _write_cache(db, secret_normalized, normalized_guess, score)
+
+    guess_row = models.RandomGuess(
+        random_round_id=round_.id,
         session_id=session.id,
         guess=raw_guess.strip(),
         normalized_guess=normalized_guess,

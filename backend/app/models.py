@@ -49,6 +49,20 @@ class PlayerSession(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class RandomRound(Base):
+    """A private, session-owned round used after a player leaves the daily game."""
+
+    __tablename__ = "random_rounds"
+    __table_args__ = (Index("ix_random_rounds_session_created", "session_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("player_sessions.id"), nullable=False)
+    secret_word_id: Mapped[int] = mapped_column(ForeignKey("words.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    secret_word: Mapped["Word"] = relationship()
+
+
 class Guess(Base):
     __tablename__ = "guesses"
     __table_args__ = (
@@ -57,6 +71,22 @@ class Guess(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     daily_game_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("daily_games.id"), nullable=False)
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("player_sessions.id"), nullable=False)
+    guess: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalized_guess: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RandomGuess(Base):
+    __tablename__ = "random_guesses"
+    __table_args__ = (
+        Index("ix_random_guesses_round_session", "random_round_id", "session_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    random_round_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("random_rounds.id"), nullable=False)
     session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("player_sessions.id"), nullable=False)
     guess: Mapped[str] = mapped_column(String(64), nullable=False)
     normalized_guess: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

@@ -43,6 +43,7 @@ def get_today(
 def reveal_secret_word(
     game_id: str,
     db: Session = Depends(get_db),
+    session_id: str | None = Depends(read_session_cookie),
 ):
     try:
         game_uuid = uuid.UUID(game_id)
@@ -50,12 +51,17 @@ def reveal_secret_word(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
 
     daily_game = db.get(models.DailyGame, game_uuid)
-    if daily_game is None:
+    random_round = None if daily_game else db.get(models.RandomRound, game_uuid)
+    if daily_game is None and random_round is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
+    if random_round is not None and str(random_round.session_id) != session_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
 
+    active_game = daily_game or random_round
+
     return RevealResponse(
-        game_id=str(daily_game.id),
-        secret_word=daily_game.secret_word.normalized_word,
+        game_id=str(active_game.id),
+        secret_word=active_game.secret_word.normalized_word,
         revealed_by_ad=True,
     )
 
@@ -69,13 +75,23 @@ def start_next_round(
 ):
     session = game_service.get_or_create_session(db, session_id)
     write_session_cookie(response, str(session.id))
-    db.execute(
-        models.Guess.__table__.delete().where(models.Guess.session_id == session.id)
-    )
-    db.commit()
+    excluded_word_ids: set[int] = set()
+    previous_game_id = (payload or {}).get("game_id")
+    if previous_game_id:
+        try:
+            previous_game_uuid = uuid.UUID(previous_game_id)
+        except ValueError:
+            previous_game_uuid = None
+        if previous_game_uuid:
+            previous_daily = db.get(models.DailyGame, previous_game_uuid)
+            previous_random = None if previous_daily else db.get(models.RandomRound, previous_game_uuid)
+            if previous_daily:
+                excluded_word_ids.add(previous_daily.secret_word_id)
+            elif previous_random and previous_random.session_id == session.id:
+                excluded_word_ids.add(previous_random.secret_word_id)
 
-    daily_game = game_service.get_or_create_daily_game(db, _today())
-    return TodayGameResponse(game_id=str(daily_game.id), date=daily_game.game_date)
+    random_round = game_service.create_random_round(db, session, excluded_word_ids)
+    return TodayGameResponse(game_id=str(random_round.id), date=_today(), mode="random")
 
 
 @router.post("/guess", response_model=GuessResponse)
@@ -99,16 +115,20 @@ def post_guess(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
 
     daily_game = db.get(models.DailyGame, game_uuid)
-    if daily_game is None:
+    random_round = None if daily_game else db.get(models.RandomRound, game_uuid)
+    if daily_game is None and (random_round is None or random_round.session_id != session.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found.")
 
     # If already solved by this session, don't leak more info — just replay
     # the winning result.
+    guess_model = models.Guess if daily_game else models.RandomGuess
+    game_column = guess_model.daily_game_id if daily_game else guess_model.random_round_id
+    active_game = daily_game or random_round
     already_won = db.execute(
-        select(models.Guess).where(
-            models.Guess.daily_game_id == daily_game.id,
-            models.Guess.session_id == session.id,
-            models.Guess.is_correct.is_(True),
+        select(guess_model).where(
+            game_column == active_game.id,
+            guess_model.session_id == session.id,
+            guess_model.is_correct.is_(True),
         )
     ).scalar_one_or_none()
     if already_won:
@@ -119,7 +139,10 @@ def post_guess(
             is_correct=True,
         )
 
-    guess_row, _was_duplicate = game_service.submit_guess(db, daily_game, session, payload.guess)
+    if daily_game:
+        guess_row, _was_duplicate = game_service.submit_guess(db, daily_game, session, payload.guess)
+    else:
+        guess_row, _was_duplicate = game_service.submit_random_guess(db, random_round, session, payload.guess)
 
     return GuessResponse(
         guess=guess_row.guess,
@@ -144,11 +167,19 @@ def get_history(
     except ValueError:
         return HistoryResponse(game_id=game_id, guesses=[], best_score=0, solved=False)
 
-    rows = db.execute(
-        select(models.Guess)
-        .where(models.Guess.daily_game_id == game_uuid, models.Guess.session_id == session_uuid)
-        .order_by(models.Guess.created_at.asc())
-    ).scalars().all()
+    daily_game = db.get(models.DailyGame, game_uuid)
+    if daily_game:
+        query = select(models.Guess).where(
+            models.Guess.daily_game_id == game_uuid, models.Guess.session_id == session_uuid
+        ).order_by(models.Guess.created_at.asc())
+    else:
+        random_round = db.get(models.RandomRound, game_uuid)
+        if random_round is None or random_round.session_id != session_uuid:
+            return HistoryResponse(game_id=game_id, guesses=[], best_score=0, solved=False)
+        query = select(models.RandomGuess).where(
+            models.RandomGuess.random_round_id == game_uuid, models.RandomGuess.session_id == session_uuid
+        ).order_by(models.RandomGuess.created_at.asc())
+    rows = db.execute(query).scalars().all()
 
     best = max((r.score for r in rows), default=0)
     solved = any(r.is_correct for r in rows)

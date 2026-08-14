@@ -13,7 +13,7 @@ import { getToday, submitGuess, getHistory, revealSecretWord, startNextRound } f
 export default function App() {
   if (window.location.pathname === "/privacy") return <PrivacyPage />;
 
-  const [game, setGame] = useState(null); // { game_id, date }
+  const [game, setGame] = useState(null); // { game_id, date, mode }
   const [guesses, setGuesses] = useState([]); // newest first
   const [current, setCurrent] = useState({ score: 0, feedback: "" });
   const [loading, setLoading] = useState(false);
@@ -81,7 +81,7 @@ export default function App() {
   const resetRound = useCallback(async () => {
     setLoading(true);
     try {
-      const nextGame = await startNextRound();
+      const nextGame = await startNextRound(game?.game_id);
       const history = await getHistory(nextGame.game_id);
       setGame(nextGame);
       setGuesses([]);
@@ -98,7 +98,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [game]);
 
   const handleRevealAd = useCallback(async () => {
     if (!game) return;
@@ -124,9 +124,13 @@ export default function App() {
 
         <main className="flex-1 flex flex-col gap-6 pb-10">
           <section className="text-center">
-            <h1 className="font-display text-3xl mb-1">Today's word</h1>
+            <h1 className="font-display text-3xl mb-1">
+              {game?.mode === "random" ? "Random word" : "Today's word"}
+            </h1>
             <p className="text-muted text-sm">
-              One word, hidden. Guess by meaning — spelling won't help you.
+              {game?.mode === "random"
+                ? "A fresh private challenge. Guess by meaning — spelling won't help you."
+                : "One shared word, hidden. Guess by meaning — spelling won't help you."}
             </p>
           </section>
 
@@ -158,7 +162,7 @@ export default function App() {
         <AdContainer placement="footer" className="mb-4" />
 
         <footer className="text-center text-xs text-muted py-4 border-t border-chartline">
-          {import.meta.env.VITE_APP_TITLE ?? "Meridian"} — a new word to chart every day.
+          {import.meta.env.VITE_APP_TITLE ?? "Meridian"} — a shared daily word, plus unlimited random rounds.
           <a className="underline hover:text-parchment" href="/privacy">Privacy</a>
         </footer>
       </div>
