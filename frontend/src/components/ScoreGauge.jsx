@@ -37,8 +37,8 @@ export default function ScoreGauge({ score, feedback, loading }) {
   const arcOffset = circumference * (1 - display / 100);
 
   return (
-    <div className="relative flex flex-col items-center contour-field rounded-3xl py-8">
-      <div className="relative w-56 h-56">
+    <div className="relative flex flex-col items-center contour-field rounded-3xl py-6 px-4">
+      <div className="relative w-40 h-40 sm:w-56 sm:h-56">
         <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
           <circle cx="100" cy="100" r="80" fill="none" stroke="#2a3244" strokeWidth="10" />
           <circle
@@ -53,17 +53,17 @@ export default function ScoreGauge({ score, feedback, loading }) {
             strokeDashoffset={arcOffset}
             style={{ transition: "stroke-dashoffset 80ms linear, stroke 80ms linear" }}
           />
-        </svg>
-        {/* needle */}
-        <div
-          className="absolute left-1/2 top-1/2 origin-bottom w-1 h-20 rounded-full"
-          style={{
-            background: color,
-            transform: `translate(-50%, -100%) rotate(${angle}deg)`,
+          <span
+            className="font-mono text-4xl sm:text-5xl font-bold tabular-nums"
+            style={{ color }}
+            aria-live="polite"
+          >
+            {loading ? "···" : `${display}%`}
+          </span>
             transition: "transform 80ms linear, background 80ms linear",
-            boxShadow: `0 0 16px ${color}`,
-          }}
-        />
+        <p className="mt-4 text-base sm:text-lg" aria-live="polite">
+          {loading ? "Checking your guess…" : feedback}
+        </p>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
             className="font-mono text-5xl font-bold tabular-nums"

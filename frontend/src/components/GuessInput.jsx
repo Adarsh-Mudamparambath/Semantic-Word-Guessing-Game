@@ -16,7 +16,7 @@ export default function GuessInput({ onSubmit, disabled, error }) {
       <label htmlFor="guess-input" className="sr-only">
         Enter a word
       </label>
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <input
           id="guess-input"
           type="text"
@@ -27,14 +27,14 @@ export default function GuessInput({ onSubmit, disabled, error }) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           disabled={disabled}
-          className="flex-1 bg-chart border border-chartline rounded-xl px-5 py-4 text-lg
+          className="flex-1 bg-chart border border-chartline rounded-xl px-4 py-3 sm:px-5 sm:py-4 text-base sm:text-lg
                      placeholder:text-muted focus-visible:border-ice outline-none
                      disabled:opacity-50 transition-colors"
         />
         <button
           type="submit"
           disabled={disabled || !value.trim()}
-          className="px-6 py-4 rounded-xl bg-ember text-void font-semibold
+          className="px-4 sm:px-6 py-3 sm:py-4 rounded-xl bg-ember text-void font-semibold
                      hover:bg-embersoft transition-colors disabled:opacity-40
                      disabled:cursor-not-allowed"
         >

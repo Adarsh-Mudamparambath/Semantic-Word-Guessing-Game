@@ -124,7 +124,7 @@ export default function App() {
 
         <main className="flex-1 flex flex-col gap-6 pb-10">
           <section className="text-center">
-            <h1 className="font-display text-3xl mb-1">
+            <h1 className="font-display text-2xl sm:text-3xl mb-1">
               {game?.mode === "random" ? "Random word" : "Today's word"}
             </h1>
             <p className="text-muted text-sm">
