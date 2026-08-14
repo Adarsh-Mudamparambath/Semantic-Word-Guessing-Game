@@ -53,6 +53,19 @@ export default function ScoreGauge({ score, feedback, loading }) {
             strokeDashoffset={arcOffset}
             style={{ transition: "stroke-dashoffset 80ms linear, stroke 80ms linear" }}
           />
+        </svg>
+        {/* needle */}
+        <div
+          className="absolute left-1/2 top-1/2 origin-bottom w-1 h-20 rounded-full"
+          style={{
+            background: color,
+            transform: `translate(-50%, -100%) rotate(${angle}deg)`,
+            transition: "transform 80ms linear, background 80ms linear",
+            boxShadow: `0 0 16px ${color}`,
+          }}
+        />
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
             className="font-mono text-4xl sm:text-5xl font-bold tabular-nums"
             style={{ color }}
@@ -60,21 +73,9 @@ export default function ScoreGauge({ score, feedback, loading }) {
           >
             {loading ? "···" : `${display}%`}
           </span>
-            transition: "transform 80ms linear, background 80ms linear",
-        <p className="mt-4 text-base sm:text-lg" aria-live="polite">
-          {loading ? "Checking your guess…" : feedback}
-        </p>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span
-            className="font-mono text-5xl font-bold tabular-nums"
-            style={{ color }}
-            aria-live="polite"
-          >
-            {loading ? "···" : `${display}%`}
-          </span>
         </div>
       </div>
-      <p className="mt-4 text-lg" aria-live="polite">
+      <p className="mt-4 text-base sm:text-lg" aria-live="polite">
         {loading ? "Checking your guess…" : feedback}
       </p>
     </div>
