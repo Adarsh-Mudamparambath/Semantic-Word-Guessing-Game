@@ -94,3 +94,12 @@ def test_new_round_resets_guesses_for_session():
     assert resp.status_code == 200
     history = client.get(f"/api/game/history?game_id={today['game_id']}")
     assert history.json()["guesses"] == []
+
+
+def test_new_round_creates_a_session_when_cookie_is_missing():
+    anonymous_client = TestClient(app)
+
+    resp = anonymous_client.post("/api/game/new-round", json={})
+
+    assert resp.status_code == 200
+    assert "swg_session" in resp.cookies

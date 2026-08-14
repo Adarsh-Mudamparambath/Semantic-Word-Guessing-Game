@@ -62,14 +62,13 @@ def reveal_secret_word(
 
 @router.post("/new-round", response_model=TodayGameResponse)
 def start_next_round(
+    response: Response,
     payload: dict | None = None,
     db: Session = Depends(get_db),
     session_id: str | None = Depends(read_session_cookie),
 ):
-    if not session_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session required.")
-
     session = game_service.get_or_create_session(db, session_id)
+    write_session_cookie(response, str(session.id))
     db.execute(
         models.Guess.__table__.delete().where(models.Guess.session_id == session.id)
     )
