@@ -19,41 +19,24 @@ Architecture (see docs/architecture.md):
             v
     write-through both caches
 
-Two backends implement `SCORING_BACKENDS[name](secret, guess) -> int`:
-
-  - "llm_judge": ask an Anthropic model to output a calibrated 0-100
-    closeness score, anchored with few-shot examples. No embedding model
-    download required. This is the default because the sandboxed dev
-    environment here cannot reach huggingface.co to pull model weights.
-
-  - "sentence_transformers": local embedding model + cosine similarity.
-    Stubbed out below with the exact interface to fill in once you have
-    unrestricted network access to download model weights. Swapping
-    SCORING_BACKEND=sentence_transformers in .env is the only change
-    needed elsewhere in the app — nothing else references the backend.
+The scoring backend uses pre-computed sentence-transformer embeddings and
+cosine similarity. Scores are calibrated to the game's 0-100 range.
 
 Do NOT use spelling/edit-distance similarity anywhere in this module.
 """
 
-import functools
-import os
+import json
 import re
+from typing import TYPE_CHECKING
 
-import anthropic
+import numpy as np
 
 from app.config import get_settings
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 settings = get_settings()
-
-_client: anthropic.Anthropic | None = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
-    return _client
-
 
 def normalize(word: str) -> str:
     """Lowercase, trim, strip to letters only. Same normalization for
@@ -64,127 +47,129 @@ def normalize(word: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# LLM-judge backend
+# sentence-transformers backend
 # ---------------------------------------------------------------------------
 
-_CALIBRATION_EXAMPLES = """\
-secret=ocean guess=computer -> 4
-secret=ocean guess=mountain -> 17
-secret=ocean guess=fish -> 62
-secret=ocean guess=beach -> 82
-secret=ocean guess=water -> 93
-secret=ocean guess=sea -> 97
-secret=football guess=soccer -> 91
-secret=football guess=stadium -> 68
-secret=football guess=banana -> 3
-secret=doctor guess=hospital -> 71
-secret=doctor guess=telescope -> 5
-"""
-
-_SYSTEM_PROMPT = f"""You score how semantically close a guessed word is to a secret word, \
-for a word-guessing game. Output ONLY an integer 0-100. Base the score \
-PURELY on meaning/semantic relatedness (shared concept, category, typical \
-association, real-world connection) — NEVER on spelling, letters, length, \
-or how the words sound. Two words can score very low even if they look or \
-sound alike, and very high even if spelled completely differently.
-
-Calibration anchors (secret, guess -> score) — match this scale closely:
-{_CALIBRATION_EXAMPLES}
-Respond with ONLY the integer, nothing else."""
+_embedding_model = None
 
 
-@functools.lru_cache(maxsize=4096)
-def _llm_judge_cached(secret_normalized: str, guess_normalized: str, model: str) -> int:
-    client = _get_client()
-    resp = client.messages.create(
-        model=model,
-        max_tokens=8,
-        temperature=0,
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": f"secret={secret_normalized} guess={guess_normalized} ->"}],
-    )
-    text = resp.content[0].text.strip()
-    match = re.search(r"\d+", text)
-    if not match:
-        return 0
-    return max(0, min(100, int(match.group())))
-
-
-def score_llm_judge(secret_normalized: str, guess_normalized: str) -> int:
-    return _llm_judge_cached(secret_normalized, guess_normalized, settings.anthropic_model)
-
-
-# ---------------------------------------------------------------------------
-# sentence-transformers backend (stub — fill in when model download is possible)
-# ---------------------------------------------------------------------------
-
-def score_sentence_transformers(secret_normalized: str, guess_normalized: str) -> int:
-    """
-    Reference implementation to complete once huggingface.co (or a mirror)
-    is reachable from this environment:
-
+def _get_embedding_model():
+    """Lazy-load the embedding model once."""
+    global _embedding_model
+    if _embedding_model is None:
         from sentence_transformers import SentenceTransformer
-        import numpy as np
+        _embedding_model = SentenceTransformer(settings.embedding_model)
+    return _embedding_model
 
-        _model = SentenceTransformer(settings.embedding_model)  # load once
 
-        def score_sentence_transformers(secret_normalized, guess_normalized):
-            vecs = _model.encode([secret_normalized, guess_normalized], normalize_embeddings=True)
-            cosine = float(np.dot(vecs[0], vecs[1]))          # in [-1, 1]
-            return calibrate(cosine)                          # -> [0, 100], see below
+def _get_embedding_for_word(word: str, db: "Session") -> np.ndarray | None:
+    """Fetch pre-computed embedding for a normalized word from the database."""
+    if db is None:
+        raise ValueError("A database session is required for semantic scoring.")
+    
+    from sqlalchemy import select
+    from app import models
+    
+    # Find the word in the database
+    word_row = db.execute(
+        select(models.Word).where(models.Word.normalized_word == word)
+    ).scalar_one_or_none()
+    
+    if word_row is None:
+        return None
+    
+    # Find the embedding for this word
+    embedding_row = db.execute(
+        select(models.WordEmbedding).where(
+            models.WordEmbedding.word_id == word_row.id,
+            models.WordEmbedding.model_name == settings.embedding_model,
+        )
+    ).scalar_one_or_none()
+    
+    if embedding_row is None:
+        return None
+    
+    # Parse the JSON-encoded embedding
+    try:
+        embedding_list = json.loads(embedding_row.embedding)
+        return np.array(embedding_list, dtype=np.float32)
+    except (json.JSONDecodeError, ValueError):
+        return None
 
-    `calibrate()` should be tuned against docs/game-mechanics.md examples
-    (a simple linear remap of cosine's typical [0.2, 1.0] range into
-    [0, 100] is a reasonable starting point; verify against the test
-    dataset in scripts/ and tests/test_scoring.py before shipping).
+
+def _calibrate_cosine_to_score(cosine_similarity: float) -> int:
+    """Convert cosine similarity [-1, 1] to a game score [0, 100].
+    
+    Cosine similarity for related words is typically in [0.2, 1.0].
+    This calibrates using the examples from the game-mechanics.
     """
-    raise NotImplementedError(
-        "sentence_transformers backend requires downloading model weights; "
-        "not available in this sandboxed environment. See docstring above."
-    )
+    # Typical range for semantically related words is [0.2, 1.0]
+    # Map [0.2, 1.0] -> [0, 100], with values below 0.2 -> very cold
+    if cosine_similarity < 0.0:
+        cosine_similarity = 0.0
+    
+    # Simple linear mapping: 0.2 -> 0, 1.0 -> 100
+    # For values below 0.2, use a steeper curve
+    if cosine_similarity < 0.2:
+        score = cosine_similarity * 50  # [0, 0.2] -> [0, 10]
+    else:
+        # [0.2, 1.0] -> [10, 100]
+        score = 10 + (cosine_similarity - 0.2) * (100 - 10) / (1.0 - 0.2)
+    
+    return int(round(score))
+
+
+def score_sentence_transformers(secret_normalized: str, guess_normalized: str, db: "Session | None" = None) -> int:
+    """Score using pre-computed semantic embeddings and cosine similarity.
+    
+    This requires pre-computed word embeddings and a database session.
+    """
+    if db is None:
+        raise ValueError("A database session is required for semantic scoring.")
+    
+    # Get embeddings for both words
+    secret_embedding = _get_embedding_for_word(secret_normalized, db)
+    guess_embedding = _get_embedding_for_word(guess_normalized, db)
+    
+    if secret_embedding is None or guess_embedding is None:
+        raise RuntimeError(
+            "A semantic embedding is missing. Run backend/scripts/precompute_embeddings.py."
+        )
+    
+    secret_norm = np.linalg.norm(secret_embedding)
+    guess_norm = np.linalg.norm(guess_embedding)
+    if secret_norm == 0 or guess_norm == 0:
+        raise RuntimeError("Cannot score a zero-length semantic embedding.")
+    cosine_sim = float(np.dot(secret_embedding, guess_embedding) / (secret_norm * guess_norm))
+    
+    # Calibrate to [0, 100] score
+    score = _calibrate_cosine_to_score(cosine_sim)
+    
+    return score
 
 
 SCORING_BACKENDS = {
-    "llm_judge": score_llm_judge,
     "sentence_transformers": score_sentence_transformers,
 }
 
 
 def _fallback_score(secret_normalized: str, guess_normalized: str) -> int:
-    """Best-effort offline scorer used when the configured backend is unavailable.
-
-    It keeps the app functional without an Anthropic API key or network access while
-    preserving a stable ordering for common near-miss guesses.
-    """
-    if secret_normalized == guess_normalized:
-        return 100
-    if not guess_normalized:
-        return 0
-
-    secret_chars = set(secret_normalized)
-    guess_chars = set(guess_normalized)
-    overlap = len(secret_chars & guess_chars)
-    overlap_pct = (overlap / max(len(secret_chars | guess_chars), 1)) * 100
-
-    shared_bigrams = 0
-    secret_bigrams = {secret_normalized[i : i + 2] for i in range(len(secret_normalized) - 1)}
-    guess_bigrams = {guess_normalized[i : i + 2] for i in range(len(guess_normalized) - 1)}
-    if secret_bigrams and guess_bigrams:
-        shared_bigrams = len(secret_bigrams & guess_bigrams)
-        shared_bigrams = min(shared_bigrams, 5)
-
-    heuristic = 12 + overlap_pct * 0.8 + shared_bigrams * 8
-    if len(secret_normalized) > 0 and guess_normalized.startswith(secret_normalized[:2]):
-        heuristic += 10
-    if len(guess_normalized) > 0 and len(secret_normalized) > 0 and secret_normalized[0] == guess_normalized[0]:
-        heuristic += 5
-
-    return max(0, min(99, int(round(heuristic))))
+    """Compatibility helper: never infer meaning from spelling."""
+    return 0
 
 
-def calculate_score(secret_word: str, guess: str) -> int:
+def calculate_score(secret_word: str, guess: str, db: "Session | None" = None) -> int:
     """Public entry point: normalize, exact-match shortcut, then delegate
-    to the configured scoring backend. Always returns an int in [0, 100]."""
+    to the configured scoring backend. Always returns an int in [0, 100].
+    
+    Args:
+        secret_word: The secret word to compare against
+        guess: The guessed word
+        db: Database session used to retrieve semantic embeddings.
+    
+    Returns:
+        An integer score in [0, 100]
+    """
     secret_normalized = normalize(secret_word)
     guess_normalized = normalize(guess)
 
@@ -198,10 +183,7 @@ def calculate_score(secret_word: str, guess: str) -> int:
     if backend is None:
         raise ValueError(f"Unknown SCORING_BACKEND: {settings.scoring_backend}")
 
-    try:
-        score = backend(secret_normalized, guess_normalized)
-    except Exception:
-        score = _fallback_score(secret_normalized, guess_normalized)
+    score = backend(secret_normalized, guess_normalized, db)
 
     score = max(0, min(100, int(score)))
 

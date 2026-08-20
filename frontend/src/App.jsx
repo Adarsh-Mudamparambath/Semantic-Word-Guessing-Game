@@ -21,6 +21,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showWin, setShowWin] = useState(false);
   const [showAdReveal, setShowAdReveal] = useState(false);
+  const [showNextWord, setShowNextWord] = useState(false);
   const [revealedWord, setRevealedWord] = useState("");
   const [initLoading, setInitLoading] = useState(true);
 
@@ -88,6 +89,7 @@ export default function App() {
       setCurrent({ score: 0, feedback: "" });
       setShowWin(false);
       setShowAdReveal(false);
+      setShowNextWord(false);
       setRevealedWord("");
       setError("");
       if (history.solved) {
@@ -108,6 +110,7 @@ export default function App() {
       const result = await revealSecretWord(game.game_id);
       setRevealedWord(result.secret_word);
       setShowAdReveal(true);
+      setShowNextWord(true);
     } catch (e) {
       setError("Ad reveal failed. Please try again.");
     } finally {
@@ -151,6 +154,17 @@ export default function App() {
                   Reveal answer
                 </button>
               </div>
+
+              {showNextWord && !showAdReveal && (
+                <button
+                  type="button"
+                  onClick={resetRound}
+                  disabled={loading || !game}
+                  className="w-full py-3 rounded-xl border border-ember text-ember hover:bg-ember/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next word
+                </button>
+              )}
 
               <AdContainer placement="inline" />
 

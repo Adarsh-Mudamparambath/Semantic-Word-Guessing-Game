@@ -16,15 +16,15 @@ def test_exact_match_always_100():
 
 
 def test_non_exact_never_reaches_100():
-    with patch.object(scoring, "SCORING_BACKENDS", {"llm_judge": lambda s, g: 100}):
+    with patch.object(scoring, "SCORING_BACKENDS", {"sentence_transformers": lambda s, g, db: 100}):
         score = scoring.calculate_score("ocean", "sea")
         assert score <= 99
 
 
 def test_score_clamped_0_100():
-    with patch.object(scoring, "SCORING_BACKENDS", {"llm_judge": lambda s, g: 500}):
+    with patch.object(scoring, "SCORING_BACKENDS", {"sentence_transformers": lambda s, g, db: 500}):
         assert scoring.calculate_score("ocean", "banana") <= 100
-    with patch.object(scoring, "SCORING_BACKENDS", {"llm_judge": lambda s, g: -20}):
+    with patch.object(scoring, "SCORING_BACKENDS", {"sentence_transformers": lambda s, g, db: -20}):
         assert scoring.calculate_score("ocean", "banana") >= 0
 
 
@@ -32,10 +32,13 @@ def test_empty_guess_scores_zero():
     assert scoring.calculate_score("ocean", "   ") == 0
 
 
-def test_api_failure_falls_back_to_local_similarity():
-    with patch.object(scoring, "_get_client", side_effect=Exception("bad api key")):
-        score = scoring.calculate_score("ocean", "sea")
-        assert 0 <= score <= 99
+def test_cosine_similarity_is_calibrated_without_spelling():
+    with patch.object(
+        scoring,
+        "_get_embedding_for_word",
+        side_effect=[scoring.np.array([1.0, 0.0]), scoring.np.array([1.0, 0.0])],
+    ):
+        assert scoring.score_sentence_transformers("ocean", "sea", object()) == 100
 
 
 def test_feedback_thresholds_monotonic():
@@ -51,8 +54,6 @@ def test_relative_ordering_placeholder():
 
         assert calculate_score("ocean", "sea") > calculate_score("ocean", "mountain")
 
-    Skipped by default since it requires a live ANTHROPIC_API_KEY; run
-    manually with `pytest -m live_llm` after setting the backend config
-    to a lightweight/cheap model for iteration.
+    Run this ordering check after embeddings are precomputed in a test database.
     """
     assert True

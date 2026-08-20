@@ -9,33 +9,20 @@ Browser (React)
 FastAPI backend
       │
       ├── game_service.py    daily word selection, guess submission, dedup
-      ├── scoring.py          normalize -> exact-match -> cache -> LLM judge -> calibrate
+      ├── scoring.py          normalize -> exact-match -> cache -> embeddings -> cosine -> calibrate
       └── SQLAlchemy models   words, daily_games, player_sessions, guesses, score_cache
       │
       v
 PostgreSQL
 ```
 
-## Why an LLM judge instead of a local embedding model
+## Semantic scoring
 
-The original spec calls for a pretrained sentence-embedding model +
-cosine similarity + a calibration layer. That is still the intended
-production design (`SCORING_BACKEND=sentence_transformers`), but this
-codebase was built in a sandboxed environment without access to
-huggingface.co, so model weights couldn't be downloaded here.
-
-Instead, `SCORING_BACKEND=llm_judge` (the default) asks a Claude model to
-output a single calibrated 0–100 semantic-closeness score per (secret,
-guess) pair, anchored with the same few-shot examples from the spec
-(ocean/beach -> 82, etc). This satisfies every game rule — semantics only,
-never spelling, exact match always 100, output clamped to [0, 100] — with
-zero model download.
-
-**Swapping to a real embedding model later:** implement the function body
-in `app/scoring.py::score_sentence_transformers` (the interface and a
-worked example are already there), set `SCORING_BACKEND=sentence_transformers`
-in `.env`, and nothing else in the app changes — `game_service.py` and the
-API only ever call `scoring.calculate_score()`.
+The game uses the pretrained `sentence-transformers/all-MiniLM-L6-v2` model
+locally. The setup script precomputes one vector for every active dictionary
+word and stores it in `word_embeddings`. Each valid guess is scored by cosine
+similarity against the secret word's vector, then calibrated to 0-100. No
+Claude API or other remote scoring service is used.
 
 ## Score pipeline
 
@@ -50,7 +37,7 @@ DB score_cache lookup ──hit──► cached score   (shared across ALL playe
     │ miss
 in-process LRU (scoring.py)  ──hit──► cached score
     │ miss
-scoring backend (llm_judge)
+scoring backend (sentence_transformers)
     │
 clamp [0, 100], guard: non-exact guess can never show 100
     │
@@ -87,6 +74,5 @@ in the last 60 days, and every subsequent request that day reuses the same
 - **User accounts**: `player_sessions` is deliberately anonymous-only for
   the MVP; a nullable `user_id` FK is the only schema change needed to
   attach accounts later.
-- **pgvector**: reserved in `docker-compose.yml` (the `pgvector/pgvector`
-  Postgres image) for when `SCORING_BACKEND=sentence_transformers` is
-  enabled and secret-word embeddings are stored for fast lookup.
+- **pgvector**: reserved in `docker-compose.yml`; embeddings currently use
+  JSON storage and NumPy cosine similarity.

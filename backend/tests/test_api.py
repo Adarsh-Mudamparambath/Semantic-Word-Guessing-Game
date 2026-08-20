@@ -35,6 +35,7 @@ def setup_db():
     db = TestSessionLocal()
     db.add(Word(word="Ocean", normalized_word="ocean", category="Nature", is_active=True))
     db.add(Word(word="Football", normalized_word="football", category="Sports", is_active=True))
+    db.add(Word(word="Boat", normalized_word="boat", category="Nature", is_active=True))
     db.commit()
     db.close()
     yield
@@ -67,6 +68,16 @@ def test_invalid_guess_rejected():
     today = client.get("/api/game/today").json()
     resp = client.post("/api/game/guess", json={"game_id": today["game_id"], "guess": "a"})
     assert resp.status_code == 422
+
+
+def test_unknown_word_rejected():
+    today = client.get("/api/game/today").json()
+    resp = client.post(
+        "/api/game/guess",
+        json={"game_id": today["game_id"], "guess": "tyierrlfjnjf"},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "That word is not in the game dictionary."
 
 
 def test_duplicate_guess_returns_same_score():

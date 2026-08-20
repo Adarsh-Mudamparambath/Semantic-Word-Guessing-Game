@@ -19,10 +19,10 @@ Ocean    → 100%
 
 - **Backend**: FastAPI, PostgreSQL, SQLAlchemy, Pydantic
 - **Frontend**: React, Vite, Tailwind CSS
-- **Scoring**: Claude (`llm_judge` backend) scores semantic closeness,
-  calibrated with few-shot anchors and cached per (secret, guess) pair.
-  See `docs/architecture.md` for why, and how to swap in a local
-  sentence-transformers model later.
+- **Scoring**: local `sentence-transformers` embeddings are compared with
+  cosine similarity, calibrated to 0-100, and cached per (secret, guess) pair.
+- **Dictionary**: guesses must exist in the active curated word database before
+  they are scored.
 
 ## Project layout
 
@@ -41,7 +41,7 @@ semantic-word-game/
 
 ```bash
 cp backend/.env.example backend/.env
-# edit backend/.env — set ANTHROPIC_API_KEY at minimum
+# edit backend/.env — use SCORING_BACKEND=sentence_transformers
 
 docker compose up --build
 
@@ -62,6 +62,7 @@ pip install -r requirements.txt --break-system-packages
 cp .env.example .env   # fill in ANTHROPIC_API_KEY, point DATABASE_URL at a running Postgres
 python ../scripts/generate_word_list.py   # regenerate data/*.csv if needed
 python ../scripts/seed_database.py
+python scripts/precompute_embeddings.py
 uvicorn app.main:app --reload
 ```
 
@@ -76,7 +77,7 @@ npm run dev
 
 ```bash
 cd backend
-ANTHROPIC_API_KEY=dummy python -m pytest tests/ -q
+python -m pytest tests/ -q
 ```
 
 11 tests cover normalization, exact-match handling, score clamping,

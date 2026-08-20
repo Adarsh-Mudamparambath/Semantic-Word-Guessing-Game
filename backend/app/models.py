@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -27,6 +28,19 @@ class Word(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WordEmbedding(Base):
+    """Pre-computed semantic embeddings for words, used for fast similarity scoring."""
+
+    __tablename__ = "word_embeddings"
+    __table_args__ = (UniqueConstraint("word_id", name="uq_word_embeddings_word_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    word_id: Mapped[int] = mapped_column(ForeignKey("words.id"), nullable=False)
+    embedding: Mapped[str] = mapped_column(Text, nullable=False)  # JSON-encoded list of floats
+    model_name: Mapped[str] = mapped_column(String(256), nullable=False)  # e.g., "sentence-transformers/all-MiniLM-L6-v2"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class DailyGame(Base):

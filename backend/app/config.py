@@ -19,13 +19,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/semantic_word_game"
 
     # --- Scoring engine ---
-    # "llm_judge": call ANTHROPIC scoring model per guess (cached). Default —
-    #   works without any local embedding model / GPU / model download.
-    # "sentence_transformers": swap in a local embedding model later; see
-    #   app/scoring.py for the interface a new backend must implement.
-    scoring_backend: str = "llm_judge"
-    anthropic_model: str = "claude-sonnet-4-6"
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"  # used only if scoring_backend=sentence_transformers
+    # Compare pre-computed word embeddings locally.
+    scoring_backend: str = "sentence_transformers"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     # --- Feedback thresholds (configurable, inclusive lower bound) ---
     feedback_thresholds: dict[int, str] = {

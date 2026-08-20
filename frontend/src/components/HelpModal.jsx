@@ -16,7 +16,7 @@ export default function HelpModal({ onClose }) {
         </h2>
         <ul className="space-y-3 text-sm text-muted">
           <li>There's one secret word, shared by everyone today.</li>
-          <li>Guess any word. You'll see how close it is in meaning, not spelling.</li>
+          <li>Guess any word. You'll see how close it is in spelling, not meaning.</li>
           <li>0% is unrelated, 100% is the exact word — everything between is a clue.</li>
           <li>Use the score to explore toward the answer. No guess limit.</li>
         </ul>

@@ -166,7 +166,7 @@ def submit_guess(
         if cached is not None:
             score = cached
         else:
-            score = scoring.calculate_score(daily_game.secret_word.normalized_word, raw_guess)
+            score = scoring.calculate_score(daily_game.secret_word.normalized_word, raw_guess, db)
             _write_cache(db, secret_normalized, normalized_guess, score)
 
     guess_row = models.Guess(
@@ -208,7 +208,7 @@ def submit_random_guess(
         if cached is not None:
             score = cached
         else:
-            score = scoring.calculate_score(round_.secret_word.normalized_word, raw_guess)
+            score = scoring.calculate_score(round_.secret_word.normalized_word, raw_guess, db)
             _write_cache(db, secret_normalized, normalized_guess, score)
 
     guess_row = models.RandomGuess(

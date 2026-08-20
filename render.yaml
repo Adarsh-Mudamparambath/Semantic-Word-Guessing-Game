@@ -27,11 +27,9 @@ services:
           name: semantic-word-game-db
           property: connectionString
       - key: SCORING_BACKEND
-        value: llm_judge
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ANTHROPIC_MODEL
-        value: claude-sonnet-4-6
+        value: sentence_transformers
+      - key: EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
       - key: GUESS_RATE_LIMIT_PER_MINUTE
         value: "30"
 

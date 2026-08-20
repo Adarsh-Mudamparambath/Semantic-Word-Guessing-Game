@@ -109,6 +109,18 @@ def post_guess(
     if len(normalized) < settings.guess_min_length or len(normalized) > settings.guess_max_length:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Please enter a valid word.")
 
+    valid_word = db.execute(
+        select(models.Word.id).where(
+            models.Word.normalized_word == normalized,
+            models.Word.is_active.is_(True),
+        )
+    ).scalar_one_or_none()
+    if valid_word is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="That word is not in the game dictionary.",
+        )
+
     try:
         game_uuid = uuid.UUID(payload.game_id)
     except ValueError:
