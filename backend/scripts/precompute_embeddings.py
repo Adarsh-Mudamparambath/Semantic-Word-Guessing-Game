@@ -14,8 +14,14 @@ Usage:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
+
+# Keep the precompute job within small Render instance limits.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 
 # Add backend to path so we can import app modules
 backend_dir = Path(__file__).resolve().parents[1]
@@ -34,9 +40,6 @@ settings = get_settings()
 
 def precompute_embeddings():
     """Load all words and pre-compute their embeddings."""
-    print(f"Loading embedding model: {settings.embedding_model}")
-    model = SentenceTransformer(settings.embedding_model)
-    
     db = SessionLocal()
     try:
         # Fetch all active words
@@ -47,6 +50,18 @@ def precompute_embeddings():
         if not words:
             print("No active words found in database. Run seed_database.py first.")
             return
+
+        existing_count = db.execute(
+            select(models.WordEmbedding).where(
+                models.WordEmbedding.model_name == settings.embedding_model
+            )
+        ).scalars().all()
+        if len(existing_count) == len(words):
+            print(f"Embeddings already exist for all {len(words)} active words. Skipping.")
+            return
+
+        print(f"Loading embedding model: {settings.embedding_model}")
+        model = SentenceTransformer(settings.embedding_model)
         
         print(f"Found {len(words)} active words. Computing embeddings...")
         
@@ -56,18 +71,12 @@ def precompute_embeddings():
         # Encode all words at once (more efficient than one-by-one)
         embeddings = model.encode(
             normalized_words,
+            batch_size=32,
             normalize_embeddings=True,  # Normalize to unit length for cosine similarity
             show_progress_bar=True,
         )
         
         print(f"Computed {len(embeddings)} embeddings. Storing in database...")
-        
-        # Check for existing embeddings
-        existing_count = db.execute(
-            select(models.WordEmbedding).where(
-                models.WordEmbedding.model_name == settings.embedding_model
-            )
-        ).scalars().all()
         
         if existing_count:
             print(f"Warning: {len(existing_count)} embeddings already exist for this model.")
