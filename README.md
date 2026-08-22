@@ -91,8 +91,8 @@ response.
   model" called for in the original spec couldn't be downloaded. The
   scoring engine is architected so that's a one-function swap later —
   see `docs/architecture.md`.
-- **Word count**: 935 curated, deduplicated words across 23 categories
-  (target was ~1000) — see `data/README.md` for how to top it up.
+- **Word count**: 10,215 curated and common English words across 25 categories
+  — see `data/README.md` for how to expand it further.
 - **Ads**: `<AdContainer />` renders provider-agnostic placeholders at
   top/inline/footer placements; wire in a real network whenever ready.
 - Deliberately out of scope for this pass (see spec §41–55 "future

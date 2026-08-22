@@ -16,11 +16,16 @@ import csv
 import re
 from pathlib import Path
 
+try:
+    from wordfreq import top_n_list
+except ImportError:
+    top_n_list = None
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 
 # Curated, semantically-diverse word bank spread across categories.
-# Kept to common, everyday English words. ~23 categories, ~1000 words total.
+# Kept to common, everyday English words, supplemented by wordfreq.
 CATEGORY_WORDS = {
     "Animals": """dog cat lion tiger elephant giraffe zebra monkey bear wolf fox rabbit deer
         horse cow pig sheep goat chicken duck eagle owl sparrow penguin dolphin whale shark
@@ -147,7 +152,21 @@ CATEGORY_WORDS = {
     "Plants": """tree flower grass bush vine moss fern cactus rose tulip daisy sunflower
         orchid lily ivy bamboo oak pine maple willow palm fungus mushroom algae seed root
         leaf branch blossom petal thorn herb weed shrub sprout""".split(),
+
+    "Everyday": """water air earth fire day night morning evening time year month week
+        season world life person people man woman child family friend home house room door
+        window floor wall roof street road place work job money story idea question answer
+        name word number thing way part side end beginning center top bottom hand head face
+        eye ear mouth hair heart body mind voice sound light color shape size line point
+        group team game music picture paper letter message story problem change chance reason
+        truth fact example kind type sort amount space area age age food drink clothes
+        body weather ground sky sun moon rain snow wind heat cold
+        love help need use want hope dream plan choice answer result start move turn stop
+        open close bring take give make get put keep find know think feel see look hear speak
+        read learn teach remember believe understand""".split(),
 }
+
+COMMON_WORD_LIMIT = 10_000
 
 
 def normalize(word: str) -> str:
@@ -173,6 +192,21 @@ def main():
             seen.add(norm)
             rows.append({"word": w, "normalized_word": norm, "category": category})
 
+    if top_n_list is None:
+        raise RuntimeError(
+            "The wordfreq package is required. Install backend/requirements.txt "
+            "before generating the dictionary."
+        )
+
+    for word in top_n_list("en", COMMON_WORD_LIMIT):
+        norm = normalize(word)
+        if not norm or len(norm) < 2 or len(norm) > 30 or norm in seen:
+            continue
+        if not re.fullmatch(r"[a-z]+", norm):
+            continue
+        seen.add(norm)
+        rows.append({"word": norm, "normalized_word": norm, "category": "Common_English"})
+
     candidate_path = DATA_DIR / "candidate_words.csv"
     approved_path = DATA_DIR / "approved_words.csv"
 
@@ -183,7 +217,7 @@ def main():
             writer.writerows(rows)
 
     print(f"Wrote {len(rows)} unique words to {candidate_path.name} and {approved_path.name}")
-    print(f"Categories: {len(CATEGORY_WORDS)}")
+    print(f"Categories: {len(CATEGORY_WORDS) + 1}")
     if dropped:
         print(f"Dropped {len(dropped)} duplicate entries (kept first occurrence):")
         for w, c, reason in dropped[:20]:

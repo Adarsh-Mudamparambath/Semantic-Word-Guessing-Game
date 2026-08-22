@@ -57,7 +57,7 @@ in `app/scoring.py` — that's the single place calibration lives.
 
 ## Word selection rules
 
-- ~935 curated words across 23 categories (Animals, Nature, Food, ... see
+- ~10,215 curated and common English words across 25 categories (Animals, Nature, Food, ... see
   `data/candidate_words.csv`), deduplicated so no word appears twice even
   across categories.
 - Category is stored for admin/organizational purposes only — never shown

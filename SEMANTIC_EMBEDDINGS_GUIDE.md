@@ -122,16 +122,16 @@ This must be done before the app can score using the sentence_transformers backe
 cd backend
 python ../scripts/seed_database.py  # If not already done
 
-# Compute embeddings (takes 1-2 minutes for 935 words)
+# Compute embeddings (takes several minutes for 10,215 words)
 python ../scripts/precompute_embeddings.py
 ```
 
 Expected output:
 ```
 Loading embedding model: sentence-transformers/all-MiniLM-L6-v2
-Found 935 active words. Computing embeddings...
-Computed 935 embeddings. Storing in database...
-✓ Successfully stored 935 embeddings in database
+Found 10,215 active words. Computing embeddings...
+Computed 10,215 embeddings. Storing in database...
+✓ Successfully stored 10,215 embeddings in database
 ✓ Model: sentence-transformers/all-MiniLM-L6-v2
 ```
 
@@ -210,7 +210,7 @@ ANTHROPIC_API_KEY=dummy python -m pytest tests/test_scoring.py -v
 ## Disadvantages & Trade-offs
 
 ⚠️ **Model Download** - First run downloads ~90MB model weights
-⚠️ **Setup Time** - Must run precompute script (~1-2 min for 935 words)
+⚠️ **Setup Time** - Must run precompute script (several minutes for 10,215 words)
 ⚠️ **Database Size** - Embeddings add ~10MB to database
 ⚠️ **Less Flexible** - Can't adjust behavior without retraining (but calibration can be tuned)
 

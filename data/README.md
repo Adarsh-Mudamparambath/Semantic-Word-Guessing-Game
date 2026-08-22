@@ -1,7 +1,7 @@
 # data/
 
 - `candidate_words.csv` — full output of `scripts/generate_word_list.py`
-  (935 words, 23 categories, deduplicated).
+  (10,215 words, 25 categories, deduplicated).
 - `approved_words.csv` — the set actually seeded into the database by
   `scripts/seed_database.py`. Starts identical to candidates; remove/replace
   rows here after reviewing `scripts/check_similarity.py`'s report.
@@ -9,10 +9,10 @@
   lists near-duplicate word groups flagged within each category for
   developer review.
 
-## Getting to ~1000 words
+## Expanding the dictionary
 
-The curated bank currently sits at 935 unique words after dedup. To reach
-1000, add more entries to the `CATEGORY_WORDS` dict in
+The generator combines the curated bank with the 10,000 most common English words from `wordfreq`. To expand
+it further, add more entries to the `CATEGORY_WORDS` dict in
 `scripts/generate_word_list.py` (any category, or new ones) and re-run the
 script — it will re-dedupe automatically and won't touch existing ids in
 the DB, since `seed_database.py` upserts by `normalized_word`.
